@@ -1,0 +1,52 @@
+# Build directories
+build/
+build-*/
+out/
+cmake-build-*/
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+Makefile
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+Testing/
+
+# Qt artifacts
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qmlc
+*.jsc
+.qmake.cache
+.qmake.stash
+
+# Editor / IDE
+.vscode/
+.idea/
+.cache/
+*.user
+*.user.*
+.clangd/
+
+# Compiled object/binary files
+*.o
+*.obj
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.a
+*.lib
+
+# Misc
+*.log
+*.swp
+*.swo
+.DS_Store
