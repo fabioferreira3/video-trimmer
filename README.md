@@ -60,11 +60,17 @@ favorite helper:
 
 ```bash
 # stable, tagged release
-yay -S video-trimmer
+yay -S vtrim
 
 # or, latest git master
-yay -S video-trimmer-git
+yay -S vtrim-git
 ```
+
+> The AUR package is named `vtrim` (not `video-trimmer`) because the bare
+> `video-trimmer` name is owned by the unrelated GTK4 GNOME Circle app
+> shipped in `extra/`. Picking a distinct binary name lets the two coexist
+> on the same system. The user-facing menu entry still reads
+> *"Qt Video Trimmer"*.
 
 Both PKGBUILDs live in [`dist/aur/`](dist/aur/) in this repo for reference;
 see `dist/aur/README.md` for how new releases are pushed to the AUR.
@@ -79,7 +85,7 @@ cmake --build build -j
 Run it:
 
 ```bash
-./build/video-trimmer
+./build/vtrim
 ```
 
 For development, `compile_commands.json` is written into `build/` so
@@ -102,10 +108,10 @@ cmake --install build
 
 This installs:
 
-- `~/.local/bin/video-trimmer`
-- `~/.local/share/applications/video-trimmer.desktop`
+- `~/.local/bin/vtrim`
+- `~/.local/share/applications/vtrim.desktop`
 
-Now just run `video-trimmer` from any shell, or launch *Video Trimmer* from
+Now just run `vtrim` from any shell, or launch *Qt Video Trimmer* from
 your app menu. Because the process runs as **you**, exported clips are
 written as your user and land in any directory you can normally write to.
 
@@ -181,7 +187,7 @@ dropped — meaning BT headphones never appear in `Audio → Output Device`.
 Falling back to the older PulseAudio backend (which talks to `pipewire-pulse`
 and lists every sink the daemon exposes) restores them. If you want to
 opt out and try the native PipeWire backend anyway, set the env var
-yourself before launching: `QT_AUDIO_BACKEND=pipewire ./build/video-trimmer`.
+yourself before launching: `QT_AUDIO_BACKEND=pipewire ./build/vtrim`.
 
 ### Trim modes
 
@@ -217,7 +223,7 @@ video-trimmer/
 ├── CMakeLists.txt
 ├── README.md
 ├── packaging/
-│   └── video-trimmer.desktop          # freedesktop launcher entry
+│   └── vtrim.desktop.in               # freedesktop launcher entry (templated)
 └── src/
     ├── main.cpp
     ├── MainWindow.{h,cpp}             # menus, layout, drag-n-drop, shortcuts, settings

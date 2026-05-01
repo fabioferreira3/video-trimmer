@@ -1,8 +1,9 @@
 # Maintainer: Fabio Ferreira <fabio86ferreira@gmail.com>
 
-pkgname=video-trimmer-git
-_pkgname=video-trimmer
-pkgver=0.1.0.r0.gad8dc1d
+pkgname=vtrim-git
+_pkgname=vtrim
+_repo=video-trimmer
+pkgver=0.1.1.r0.gad8dc1d
 pkgrel=1
 pkgdesc="Millisecond-precision desktop video trimmer (Qt 6 + FFmpeg) — git master"
 arch=('x86_64')
@@ -22,11 +23,11 @@ makedepends=(
 )
 provides=("$_pkgname=$pkgver")
 conflicts=("$_pkgname")
-source=("$_pkgname::git+$url.git")
+source=("$_repo::git+$url.git")
 sha256sums=('SKIP')
 
 pkgver() {
-    cd "$_pkgname"
+    cd "$_repo"
     # <last-tag>.r<commits-since-tag>.g<short-sha>; falls back to a
     # 0.0.0.r<n>.g<sha> form if no tags exist yet.
     if git describe --long --tags >/dev/null 2>&1; then
@@ -39,7 +40,7 @@ pkgver() {
 }
 
 build() {
-    cmake -S "$_pkgname" -B build \
+    cmake -S "$_repo" -B build \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DCMAKE_INSTALL_LIBDIR=lib \

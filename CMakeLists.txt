@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(video-trimmer
-    VERSION 0.1.0
-    DESCRIPTION "Simple video trimmer built with Qt and FFmpeg"
+# The project / binary / package is named `vtrim` because the obvious name
+# `video-trimmer` is already taken by the GTK4 GNOME Circle app shipped in
+# Arch's [extra] repo (apps.gnome.org/VideoTrimmer). Sharing a binary name
+# would collide on /usr/bin/video-trimmer, so we deliberately use a short,
+# distinct identifier here. The user-facing display name in the .desktop
+# entry can still be friendlier ("Qt Video Trimmer").
+project(vtrim
+    VERSION 0.1.1
+    DESCRIPTION "Millisecond-precision video trimmer built with Qt and FFmpeg"
     LANGUAGES CXX
 )
 
@@ -23,7 +29,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
 # AUTOUIC compiles .ui files; AUTORCC compiles .qrc resource files.
 qt_standard_project_setup()
 
-qt_add_executable(video-trimmer
+qt_add_executable(vtrim
     src/main.cpp
     src/MainWindow.h
     src/MainWindow.cpp
@@ -47,15 +53,15 @@ qt_add_executable(video-trimmer
 )
 
 # Lets us write `#include "player/PlayerWidget.h"` from anywhere in the source tree.
-target_include_directories(video-trimmer PRIVATE src)
+target_include_directories(vtrim PRIVATE src)
 
-target_link_libraries(video-trimmer PRIVATE
+target_link_libraries(vtrim PRIVATE
     Qt6::Widgets
     Qt6::Multimedia
     Qt6::MultimediaWidgets
 )
 
-target_compile_options(video-trimmer PRIVATE
+target_compile_options(vtrim PRIVATE
     -Wall -Wextra -Wpedantic
 )
 
@@ -74,23 +80,23 @@ target_compile_options(video-trimmer PRIVATE
 # ---------------------------------------------------------------------------
 include(GNUInstallDirs)
 
-install(TARGETS video-trimmer
+install(TARGETS vtrim
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
 # Bake the absolute path to the binary into the .desktop's Exec= line.
 # Desktop launchers (Walker, wofi, GNOME Activities, etc.) are exec'd from
 # the systemd --user session, which usually does NOT have ~/.local/bin on
-# PATH even when your interactive shell does - so a bare `Exec=video-trimmer`
+# PATH even when your interactive shell does - so a bare `Exec=vtrim`
 # fails with "Command not found" for per-user installs. Using
 # CMAKE_INSTALL_FULL_BINDIR makes the entry correct for every prefix.
 configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/packaging/video-trimmer.desktop.in
-    ${CMAKE_CURRENT_BINARY_DIR}/video-trimmer.desktop
+    ${CMAKE_CURRENT_SOURCE_DIR}/packaging/vtrim.desktop.in
+    ${CMAKE_CURRENT_BINARY_DIR}/vtrim.desktop
     @ONLY
 )
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/video-trimmer.desktop
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/vtrim.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
 )
 

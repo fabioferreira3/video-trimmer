@@ -1,7 +1,7 @@
 # Maintainer: Fabio Ferreira <fabio86ferreira@gmail.com>
 
-pkgname=video-trimmer
-pkgver=0.1.0
+pkgname=vtrim
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Millisecond-precision desktop video trimmer (Qt 6 + FFmpeg)"
 arch=('x86_64')
@@ -18,11 +18,16 @@ makedepends=(
     'cmake'
     'gcc'
 )
+# The upstream repo is named `video-trimmer` (the AUR/binary name `vtrim` is
+# only used here, to avoid colliding with extra/video-trimmer). The GitHub
+# tag is `v$pkgver`; the tarball it ships extracts as `video-trimmer-$pkgver/`.
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
+_srcdir="video-trimmer-$pkgver"
+
 build() {
-    cmake -S "$pkgname-$pkgver" -B build \
+    cmake -S "$_srcdir" -B build \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DCMAKE_INSTALL_LIBDIR=lib \

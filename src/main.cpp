@@ -17,9 +17,15 @@ int main(int argc, char *argv[])
 
     QApplication app(argc, argv);
 
+    // Application/organization names drive QSettings storage paths; keep them
+    // stable across renames so existing users don't lose their pinned audio
+    // device, recent files, etc. The desktop file name is what compositors
+    // (Wayland especially) use to associate the running window with the
+    // installed .desktop entry — it must match the basename of vtrim.desktop.
     QApplication::setApplicationName("Video Trimmer");
-    QApplication::setApplicationVersion("0.1.0");
+    QApplication::setApplicationVersion("0.1.1");
     QApplication::setOrganizationName("video-trimmer");
+    QApplication::setDesktopFileName("vtrim");
 
     MainWindow window;
     window.show();
