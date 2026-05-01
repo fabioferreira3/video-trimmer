@@ -1,0 +1,85 @@
+# Maintainer: Fabio Ferreira <fabio86ferreira@gmail.com>
+#
+# vtrim-local: NOT for the AUR. This is a pacman-friendly way to install the
+# *current working tree* into /usr/bin so the system-wide `vtrim` is always
+# what you just edited - without ever leaving stray binaries in /usr/local
+# that pacman doesn't know about.
+#
+# Usage:
+#   makepkg -sif --noconfirm        # from this directory
+#   # or, more conveniently:
+#   cmake --build build --target refresh
+#
+# This package conflicts with the upstream `vtrim` and `vtrim-git` packages,
+# so installing it cleanly takes over the same /usr/bin/vtrim slot.
+
+pkgname=vtrim-local
+_pkgname=vtrim
+# Placeholder. The pkgver() function below overwrites this at build time
+# with a unique <project-version>.local.<UTC timestamp> string; we still
+# need a non-empty value here because makepkg's PKGBUILD linter checks
+# pkgver before pkgver() ever runs.
+pkgver=0.1.1.local.20260501144920
+pkgrel=1
+pkgdesc="Millisecond-precision desktop video trimmer (Qt 6 + FFmpeg) — local working tree build"
+arch=('x86_64')
+url="https://github.com/fabioferreira3/video-trimmer"
+license=('MIT')
+depends=(
+    'qt6-base'
+    'qt6-multimedia'
+    'qt6-multimedia-ffmpeg'
+    'ffmpeg'
+    'hicolor-icon-theme'
+)
+makedepends=(
+    'cmake'
+    'gcc'
+)
+provides=("$_pkgname")
+conflicts=("$_pkgname" "vtrim-git")
+
+# No remote source: we build straight from the workspace (three levels up
+# from this PKGBUILD). $startdir is set by makepkg to the directory holding
+# the PKGBUILD it is currently processing.
+source=()
+sha256sums=()
+
+# The workspace root, computed once so prepare()/build()/package() all agree.
+_workspace="$(realpath "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../../..")"
+
+pkgver() {
+    # Bump on every build so pacman accepts the reinstall without --overwrite.
+    # Format: <project-version>.local.<UTC timestamp>, monotonically increasing.
+    local _proj_ver
+    _proj_ver=$(awk -F'[ )]' '/^project\(vtrim/,/\)/ {
+        for (i=1; i<=NF; i++) if ($i == "VERSION") { print $(i+1); exit }
+    }' "$_workspace/CMakeLists.txt")
+    : "${_proj_ver:=0.0.0}"
+    printf "%s.local.%s" "$_proj_ver" "$(date -u +%Y%m%d%H%M%S)"
+}
+
+prepare() {
+    # Mirror only what CMake needs into $srcdir. Avoids pulling in build/,
+    # build-dev/, dist/, .git/, sample mp4s, etc.
+    local _dst="$srcdir/$_pkgname"
+    rm -rf "$_dst"
+    mkdir -p "$_dst"
+    cp -a "$_workspace/src"           "$_dst/"
+    cp -a "$_workspace/packaging"     "$_dst/"
+    cp -a "$_workspace/CMakeLists.txt" "$_dst/"
+    cp -a "$_workspace/LICENSE"       "$_dst/"
+}
+
+build() {
+    cmake -S "$srcdir/$_pkgname" -B "$srcdir/build" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -Wno-dev
+    cmake --build "$srcdir/build" -j"$(nproc)"
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install "$srcdir/build"
+}
