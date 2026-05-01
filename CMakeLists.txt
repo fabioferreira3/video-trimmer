@@ -58,3 +58,45 @@ target_link_libraries(video-trimmer PRIVATE
 target_compile_options(video-trimmer PRIVATE
     -Wall -Wextra -Wpedantic
 )
+
+# ---------------------------------------------------------------------------
+# Install rules
+#
+# Defaults to a per-user install under ~/.local so no sudo is ever needed:
+#   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+#         -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+#   cmake --build build -j
+#   cmake --install build
+#
+# For a system-wide install pass -DCMAKE_INSTALL_PREFIX=/usr/local and run the
+# install step with sudo. The .desktop entry uses a stock freedesktop icon
+# name (video-x-generic) so we don't have to ship our own artwork.
+# ---------------------------------------------------------------------------
+include(GNUInstallDirs)
+
+install(TARGETS video-trimmer
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# Bake the absolute path to the binary into the .desktop's Exec= line.
+# Desktop launchers (Walker, wofi, GNOME Activities, etc.) are exec'd from
+# the systemd --user session, which usually does NOT have ~/.local/bin on
+# PATH even when your interactive shell does - so a bare `Exec=video-trimmer`
+# fails with "Command not found" for per-user installs. Using
+# CMAKE_INSTALL_FULL_BINDIR makes the entry correct for every prefix.
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/packaging/video-trimmer.desktop.in
+    ${CMAKE_CURRENT_BINARY_DIR}/video-trimmer.desktop
+    @ONLY
+)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/video-trimmer.desktop
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+)
+
+# Ship the license file. Distro packagers (Arch's namcap in particular)
+# expect MIT-style licenses to live under /usr/share/licenses/<pkgname>/
+# because they are not in /usr/share/licenses/common/.
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/${PROJECT_NAME}
+)

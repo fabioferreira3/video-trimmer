@@ -53,6 +53,22 @@ sudo pacman -S --needed base-devel cmake qt6-base qt6-multimedia ffmpeg
 The Qt FFmpeg multimedia plugin is bundled with `qt6-multimedia` on current
 Arch, no extra package needed.
 
+### Installing from the AUR
+
+If you just want to *use* the app on Arch, install it from the AUR with your
+favorite helper:
+
+```bash
+# stable, tagged release
+yay -S video-trimmer
+
+# or, latest git master
+yay -S video-trimmer-git
+```
+
+Both PKGBUILDs live in [`dist/aur/`](dist/aur/) in this repo for reference;
+see `dist/aur/README.md` for how new releases are pushed to the AUR.
+
 ## Building
 
 ```bash
@@ -69,6 +85,49 @@ Run it:
 For development, `compile_commands.json` is written into `build/` so
 `clangd`/your editor can index the project (symlink it to the project root
 if your editor expects it there).
+
+### Installing (per-user, no sudo)
+
+The recommended way to actually *use* the app is a per-user install under
+`~/.local`, which puts the binary on your `PATH` and registers a
+`.desktop` entry so it shows up in your application launcher (Walker, wofi,
+GNOME Activities, KDE krunner, etc.):
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+cmake --build build -j
+cmake --install build
+```
+
+This installs:
+
+- `~/.local/bin/video-trimmer`
+- `~/.local/share/applications/video-trimmer.desktop`
+
+Now just run `video-trimmer` from any shell, or launch *Video Trimmer* from
+your app menu. Because the process runs as **you**, exported clips are
+written as your user and land in any directory you can normally write to.
+
+> **Don't run the app with `sudo`.** It works, but the FFmpeg child writes
+> the output as `root`, which is what causes the "I can't save the trimmed
+> file in most directories" symptom. `QSettings` also ends up under
+> `/root/.config` instead of `~/.config`, so your recent files and pinned
+> audio device won't follow you across sessions.
+
+To uninstall, delete the two files above (or run `cat
+build/install_manifest.txt | xargs rm`).
+
+### Installing system-wide
+
+Same flow, just point at a system prefix and run the install step with
+`sudo`:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
+cmake --build build -j
+sudo cmake --install build
+```
 
 ## Usage
 
@@ -157,6 +216,8 @@ ffmpeg -hide_banner -y -nostdin \
 video-trimmer/
 ├── CMakeLists.txt
 ├── README.md
+├── packaging/
+│   └── video-trimmer.desktop          # freedesktop launcher entry
 └── src/
     ├── main.cpp
     ├── MainWindow.{h,cpp}             # menus, layout, drag-n-drop, shortcuts, settings
@@ -252,5 +313,6 @@ The app uses `QStandardPaths::findExecutable` to locate them.
 
 ## License
 
-Source code is in this repository; choose and add the license you prefer
-before distributing. FFmpeg, when installed, has its own license.
+This project is released under the [MIT License](LICENSE). FFmpeg, when
+installed, has its own license — we only invoke it as a subprocess, we do
+not link against `libav*`.

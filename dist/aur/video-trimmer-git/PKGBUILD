@@ -1,0 +1,52 @@
+# Maintainer: Fabio Ferreira <fabio86ferreira@gmail.com>
+
+pkgname=video-trimmer-git
+_pkgname=video-trimmer
+pkgver=0.1.0.r0.gad8dc1d
+pkgrel=1
+pkgdesc="Millisecond-precision desktop video trimmer (Qt 6 + FFmpeg) — git master"
+arch=('x86_64')
+url="https://github.com/fabioferreira3/video-trimmer"
+license=('MIT')
+depends=(
+    'qt6-base'
+    'qt6-multimedia'
+    'qt6-multimedia-ffmpeg'
+    'ffmpeg'
+    'hicolor-icon-theme'
+)
+makedepends=(
+    'cmake'
+    'gcc'
+    'git'
+)
+provides=("$_pkgname=$pkgver")
+conflicts=("$_pkgname")
+source=("$_pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$_pkgname"
+    # <last-tag>.r<commits-since-tag>.g<short-sha>; falls back to a
+    # 0.0.0.r<n>.g<sha> form if no tags exist yet.
+    if git describe --long --tags >/dev/null 2>&1; then
+        git describe --long --tags | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+    else
+        printf "0.0.0.r%s.g%s" \
+            "$(git rev-list --count HEAD)" \
+            "$(git rev-parse --short HEAD)"
+    fi
+}
+
+build() {
+    cmake -S "$_pkgname" -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -Wno-dev
+    cmake --build build -j"$(nproc)"
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+}

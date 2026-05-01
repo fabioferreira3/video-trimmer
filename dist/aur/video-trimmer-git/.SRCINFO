@@ -1,0 +1,21 @@
+pkgbase = video-trimmer-git
+	pkgdesc = Millisecond-precision desktop video trimmer (Qt 6 + FFmpeg) — git master
+	pkgver = 0.1.0.r0.gad8dc1d
+	pkgrel = 1
+	url = https://github.com/fabioferreira3/video-trimmer
+	arch = x86_64
+	license = MIT
+	makedepends = cmake
+	makedepends = gcc
+	makedepends = git
+	depends = qt6-base
+	depends = qt6-multimedia
+	depends = qt6-multimedia-ffmpeg
+	depends = ffmpeg
+	depends = hicolor-icon-theme
+	provides = video-trimmer=0.1.0.r0.gad8dc1d
+	conflicts = video-trimmer
+	source = video-trimmer::git+https://github.com/fabioferreira3/video-trimmer.git
+	sha256sums = SKIP
+
+pkgname = video-trimmer-git

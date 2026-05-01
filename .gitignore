@@ -50,3 +50,10 @@ ui_*.h
 *.swp
 *.swo
 .DS_Store
+
+# AUR SSH keys (do NOT commit) — keep them in ~/.ssh/ instead
+/aur
+/aur.pub
+
+# Local test clips produced by the app
+*.trim.mp4
