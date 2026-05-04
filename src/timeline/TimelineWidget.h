@@ -33,6 +33,7 @@ protected:
     void mousePressEvent(QMouseEvent *) override;
     void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
+    void leaveEvent(QEvent *) override;
 
 private:
     enum class DragTarget { None, Playhead, InHandle, OutHandle };
@@ -41,7 +42,8 @@ private:
     qint64 m_positionMs = 0;
     qint64 m_inMs = 0;
     qint64 m_outMs = 0;
-    DragTarget m_drag = DragTarget::None;
+    DragTarget m_drag  = DragTarget::None;
+    DragTarget m_hover = DragTarget::None;
 
     int trackY() const;
     int trackHeight() const;

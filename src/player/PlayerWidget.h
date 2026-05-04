@@ -4,6 +4,8 @@
 #include <QWidget>
 
 class QAudioOutput;
+class QLabel;
+class QStackedWidget;
 class QVideoWidget;
 
 class PlayerWidget : public QWidget
@@ -32,6 +34,11 @@ public slots:
     // Pin the QAudioOutput to a specific device id (from QAudioDevice::id()).
     // Pass an empty id to follow the system's current default audio output.
     void setAudioDeviceById(const QByteArray &id);
+    // Switch the visual area between the video surface and the audio
+    // placeholder. The QMediaPlayer's video output stays connected to the
+    // QVideoWidget either way, so flipping back to video mode for a later
+    // file just works.
+    void setAudioOnlyMode(bool audioOnly, const QString &caption = {});
 
 signals:
     void positionChanged(qint64 ms);
@@ -40,7 +47,10 @@ signals:
     void mediaError(const QString &message);
 
 private:
-    QMediaPlayer *m_player;
-    QAudioOutput *m_audio;
-    QVideoWidget *m_videoWidget;
+    QMediaPlayer  *m_player;
+    QAudioOutput  *m_audio;
+    QVideoWidget  *m_videoWidget;
+    QStackedWidget *m_stack       = nullptr;
+    QWidget       *m_audioPage    = nullptr;
+    QLabel        *m_audioCaption = nullptr;
 };

@@ -110,7 +110,7 @@ namcap PKGBUILD *.pkg.tar.zst   # lint, address any errors/warnings
 
 If `makepkg -si` succeeds and `vtrim` launches from your menu / shell, the
 package is good. (You should see the app's launcher entry as
-*"Qt Video Trimmer"*, distinct from GNOME's "Video Trimmer".)
+*"Video Trimmer"*, distinct from GNOME's "Video Trimmer".)
 
 ### 4. Push to the AUR
 

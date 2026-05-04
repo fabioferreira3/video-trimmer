@@ -57,3 +57,13 @@ ui_*.h
 
 # Local test clips produced by the app
 *.trim.mp4
+
+# makepkg / AUR build artifacts under any dist/aur/<pkg>/ directory
+# (the PKGBUILDs themselves are tracked; their build output is not)
+dist/aur/*/src/
+dist/aur/*/pkg/
+dist/aur/*/*.pkg.tar.zst
+dist/aur/*/*.pkg.tar.xz
+dist/aur/*/*.pkg.tar.gz
+# Source tarballs downloaded by the upstream `vtrim` PKGBUILD
+dist/aur/*/*.tar.gz

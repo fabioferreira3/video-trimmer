@@ -5,10 +5,10 @@ cmake_minimum_required(VERSION 3.21)
 # Arch's [extra] repo (apps.gnome.org/VideoTrimmer). Sharing a binary name
 # would collide on /usr/bin/video-trimmer, so we deliberately use a short,
 # distinct identifier here. The user-facing display name in the .desktop
-# entry can still be friendlier ("Qt Video Trimmer").
+# entry can still be friendlier ("Video Trimmer").
 project(vtrim
-    VERSION 0.1.1
-    DESCRIPTION "Millisecond-precision video trimmer built with Qt and FFmpeg"
+    VERSION 0.1.2
+    DESCRIPTION "Millisecond-precision video trimmer"
     LANGUAGES CXX
 )
 
@@ -48,6 +48,8 @@ qt_add_executable(vtrim
     src/ffmpeg/FfprobeRunner.cpp
     src/ffmpeg/FfmpegTrimRunner.h
     src/ffmpeg/FfmpegTrimRunner.cpp
+    src/ffmpeg/FfmpegCutRunner.h
+    src/ffmpeg/FfmpegCutRunner.cpp
     src/util/TimeFormat.h
     src/util/TimeFormat.cpp
 )
@@ -106,3 +108,24 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/vtrim.desktop
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
     DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/${PROJECT_NAME}
 )
+
+# ---------------------------------------------------------------------------
+# `refresh` convenience target (Arch / pacman only)
+#
+#   cmake --build build --target refresh
+#
+# Builds and installs the *current working tree* as the `vtrim-local` pacman
+# package, replacing whatever `vtrim` / `vtrim-git` is currently installed.
+# This guarantees /usr/bin/vtrim always matches the source you just edited
+# AND stays owned by pacman (no /usr/local stragglers, no stale ~/.local
+# copies). Requires `makepkg` and a passwordless sudo entry, or it will
+# prompt in your terminal.
+# ---------------------------------------------------------------------------
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/dev/refresh-install.sh")
+    add_custom_target(refresh
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/dev/refresh-install.sh
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        USES_TERMINAL
+        COMMENT "Rebuilding vtrim-local from current working tree and installing via pacman"
+    )
+endif()

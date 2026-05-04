@@ -4,8 +4,11 @@
 #include <QAudioDevice>
 #include <QAudioOutput>
 #include <QDebug>
+#include <QLabel>
 #include <QMediaDevices>
 #include <QMediaMetaData>
+#include <QStackedWidget>
+#include <QStyle>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QVideoWidget>
@@ -28,9 +31,40 @@ PlayerWidget::PlayerWidget(QWidget *parent)
     m_player->setAudioOutput(m_audio);
     m_player->setVideoOutput(m_videoWidget);
 
+    // The visible area is a QStackedWidget with two pages: the live
+    // QVideoWidget for video files, and a static "audio mode" placeholder for
+    // audio-only files. The QMediaPlayer keeps streaming into the video
+    // widget regardless, so swapping back when the user opens a video next
+    // works without rewiring anything.
+    m_stack = new QStackedWidget(this);
+
+    m_audioPage = new QWidget(m_stack);
+    auto *audioPageLayout = new QVBoxLayout(m_audioPage);
+    audioPageLayout->setContentsMargins(0, 0, 0, 0);
+    audioPageLayout->setSpacing(8);
+    audioPageLayout->addStretch(1);
+
+    auto *audioIcon = new QLabel(m_audioPage);
+    audioIcon->setAlignment(Qt::AlignCenter);
+    const QIcon volIcon = style()->standardIcon(QStyle::SP_MediaVolume);
+    audioIcon->setPixmap(volIcon.pixmap(96, 96));
+    audioPageLayout->addWidget(audioIcon, 0, Qt::AlignHCenter);
+
+    m_audioCaption = new QLabel(tr("Audio file"), m_audioPage);
+    m_audioCaption->setAlignment(Qt::AlignCenter);
+    m_audioCaption->setStyleSheet(QStringLiteral("color: #cccccc; font-size: 14px;"));
+    audioPageLayout->addWidget(m_audioCaption, 0, Qt::AlignHCenter);
+
+    audioPageLayout->addStretch(1);
+    m_audioPage->setStyleSheet(QStringLiteral("background-color: #1a1a1a;"));
+
+    m_stack->addWidget(m_videoWidget);
+    m_stack->addWidget(m_audioPage);
+    m_stack->setCurrentWidget(m_videoWidget);
+
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->addWidget(m_videoWidget, 1);
+    layout->addWidget(m_stack, 1);
 
     m_videoWidget->setMinimumSize(320, 180);
     m_videoWidget->setStyleSheet(QStringLiteral("background-color: black;"));
@@ -112,6 +146,15 @@ void PlayerWidget::setVolume(float linear01)
 QByteArray PlayerWidget::currentAudioDeviceId() const
 {
     return m_audio->device().id();
+}
+
+void PlayerWidget::setAudioOnlyMode(bool audioOnly, const QString &caption)
+{
+    if (!m_stack) return;
+    m_stack->setCurrentWidget(audioOnly ? m_audioPage : static_cast<QWidget *>(m_videoWidget));
+    if (m_audioCaption) {
+        m_audioCaption->setText(caption.isEmpty() ? tr("Audio file") : caption);
+    }
 }
 
 void PlayerWidget::setAudioDeviceById(const QByteArray &id)

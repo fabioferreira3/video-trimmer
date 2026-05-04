@@ -126,6 +126,7 @@ MediaInfo FfprobeRunner::parseJson(const QByteArray &json, bool *ok)
             info.width  = s.value(QStringLiteral("width")).toInt();
             info.height = s.value(QStringLiteral("height")).toInt();
             info.fps    = parseRational(s.value(QStringLiteral("r_frame_rate")).toString());
+            info.avgFps = parseRational(s.value(QStringLiteral("avg_frame_rate")).toString());
             // Some containers expose duration only at the stream level.
             if (info.durationMs <= 0) {
                 const QString streamDur = s.value(QStringLiteral("duration")).toString();
@@ -135,6 +136,18 @@ MediaInfo FfprobeRunner::parseJson(const QByteArray &json, bool *ok)
             }
         } else if (type == QStringLiteral("audio") && info.audioCodec.isEmpty()) {
             info.audioCodec = s.value(QStringLiteral("codec_name")).toString();
+            // sample_rate is reported as a string ("48000") in ffprobe's JSON
+            // output even though it's numeric; channels comes through as an int.
+            info.audioSampleRate = s.value(QStringLiteral("sample_rate")).toString().toInt();
+            info.audioChannels   = s.value(QStringLiteral("channels")).toInt();
+            // Audio-only files (e.g. raw .mp3) sometimes only carry duration
+            // on the stream and not the format, just like some video containers.
+            if (info.durationMs <= 0) {
+                const QString streamDur = s.value(QStringLiteral("duration")).toString();
+                if (!streamDur.isEmpty()) {
+                    info.durationMs = static_cast<qint64>(streamDur.toDouble() * 1000.0);
+                }
+            }
         }
     }
 

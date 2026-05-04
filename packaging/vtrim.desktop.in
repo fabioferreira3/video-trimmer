@@ -1,14 +1,14 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Qt Video Trimmer
-GenericName=Video Trimmer
-Comment=Millisecond-precision video trimmer (Qt + FFmpeg)
+Name=Video Trimmer
+GenericName=Media Trimmer
+Comment=Millisecond-precision video and audio trimmer (Qt + FFmpeg)
 Exec=@CMAKE_INSTALL_FULL_BINDIR@/vtrim %F
 Icon=video-x-generic
 Terminal=false
-Categories=AudioVideo;Video;AudioVideoEditing;Qt;
-MimeType=video/mp4;video/x-matroska;video/quicktime;video/webm;video/x-msvideo;video/mpeg;video/ogg;video/x-flv;
-Keywords=video;trim;cut;clip;edit;ffmpeg;
+Categories=AudioVideo;Video;Audio;AudioVideoEditing;Qt;
+MimeType=video/mp4;video/x-matroska;video/quicktime;video/webm;video/x-msvideo;video/mpeg;video/ogg;video/x-flv;audio/mpeg;audio/mp4;audio/x-m4a;audio/aac;audio/flac;audio/x-wav;audio/wav;audio/ogg;audio/opus;audio/x-ms-wma;
+Keywords=video;audio;trim;cut;clip;edit;ffmpeg;
 StartupNotify=true
 StartupWMClass=vtrim

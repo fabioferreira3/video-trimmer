@@ -13,6 +13,6 @@ pkgbase = vtrim
 	depends = ffmpeg
 	depends = hicolor-icon-theme
 	source = vtrim-0.1.1.tar.gz::https://github.com/fabioferreira3/video-trimmer/archive/refs/tags/v0.1.1.tar.gz
-	sha256sums = SKIP
+	sha256sums = 3a1cdfb86af8213ee95666ae25e3178ba526758118caea63349e153bdf20b0f6
 
 pkgname = vtrim
