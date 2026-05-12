@@ -405,11 +405,13 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent *event)
         break;
     case DragTarget::InHandle:
         m_inMs = std::clamp<qint64>(ms, 0, m_outMs);
-        emit inOutChanged(m_inMs, m_outMs);
+        // Live preview only; the authoritative inOutChanged fires on release
+        // so the player isn't re-seeked on every pixel of mouse movement.
+        emit inOutDragged(m_inMs, m_outMs);
         break;
     case DragTarget::OutHandle:
         m_outMs = std::clamp<qint64>(ms, m_inMs, m_durationMs);
-        emit inOutChanged(m_inMs, m_outMs);
+        emit inOutDragged(m_inMs, m_outMs);
         break;
     case DragTarget::None:
         break;
@@ -420,9 +422,17 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent *event)
 void TimelineWidget::mouseReleaseEvent(QMouseEvent *event)
 {
     if (event->button() != Qt::LeftButton) return;
+    const DragTarget wasDragging = m_drag;
     m_drag = DragTarget::None;
     // Refresh hover state based on where the cursor is now resting.
     m_hover = hitTest(event->pos());
+    // Commit the In/Out edit exactly once, at drag-release. mouseMoveEvent
+    // intentionally only emits inOutDragged during the drag so the chain
+    // VideoSession -> player auto-snap -> QMediaPlayer::setPosition fires
+    // once per drag instead of once per mouse-move event.
+    if (wasDragging == DragTarget::InHandle || wasDragging == DragTarget::OutHandle) {
+        emit inOutChanged(m_inMs, m_outMs);
+    }
     update();
 }
 

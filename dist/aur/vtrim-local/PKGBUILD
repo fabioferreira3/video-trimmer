@@ -19,7 +19,7 @@ _pkgname=vtrim
 # with a unique <project-version>.local.<UTC timestamp> string; we still
 # need a non-empty value here because makepkg's PKGBUILD linter checks
 # pkgver before pkgver() ever runs.
-pkgver=0.1.1.local.20260501144920
+pkgver=0.1.2.local.20260511122558
 pkgrel=1
 pkgdesc="Millisecond-precision desktop video trimmer (Qt 6 + FFmpeg) — local working tree build"
 arch=('x86_64')

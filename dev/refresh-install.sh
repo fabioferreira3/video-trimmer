@@ -53,9 +53,17 @@ echo "==> Built package: $BUILT_PKG"
 # 3. Remove any conflicting upstream packages so the `pacman -U` below does
 # not have to ask. We use plain `-R` (not `-Rdd`) so pacman still complains
 # if something genuinely depends on vtrim - in practice nothing does.
+#
+# Match by exact installed package name, NOT by `pacman -Qq <name>`: that
+# query resolves `provides`, so once `vtrim-local` (which has
+# `provides=(vtrim)`) is installed, `pacman -Qq vtrim` happily returns
+# `vtrim-local`. We would then ask `pacman -R vtrim` to remove a package
+# that does not actually exist, which fails with "target not found: vtrim"
+# and aborts the whole script under `set -e`.
+INSTALLED_PKGS="$(pacman -Qq)"
 CONFLICTS=()
 for pkg in vtrim vtrim-git; do
-    if pacman -Qq "$pkg" >/dev/null 2>&1; then
+    if grep -Fxq "$pkg" <<<"$INSTALLED_PKGS"; then
         CONFLICTS+=("$pkg")
     fi
 done

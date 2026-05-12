@@ -26,7 +26,18 @@ public slots:
 
 signals:
     void seekRequested(qint64 ms);
+    // Authoritative in/out change. Fires for committed edits: drag-release on
+    // a handle, programmatic setIn/setOut/setInOut, etc. Listeners that mutate
+    // expensive state (the VideoSession, the QMediaPlayer position) should
+    // bind here rather than to inOutDragged, so a single drag doesn't trigger
+    // dozens of state mutations.
     void inOutChanged(qint64 inMs, qint64 outMs);
+    // Live preview while the user is mid-drag on an In/Out handle. Suitable
+    // for UI labels that should track the drag visually, but NOT for anything
+    // that calls m_player->setPosition() under the hood: Qt 6's FFmpeg-backed
+    // QMediaPlayer reloads its audio sink on every setPosition while playing,
+    // which surfaces in PipeWire as a fresh stream per call.
+    void inOutDragged(qint64 inMs, qint64 outMs);
 
 protected:
     void paintEvent(QPaintEvent *) override;

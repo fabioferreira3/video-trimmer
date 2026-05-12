@@ -41,9 +41,12 @@ signals:
     // valid HH:MM:SS[.mmm] / MM:SS[.mmm] / SS[.mmm] string.
     void inTimeEdited(qint64 ms);
     void outTimeEdited(qint64 ms);
-    // Emitted when the user picks a preset duration from the dropdown.
-    // The receiver should set Out = In + durationMs.
-    void outDurationPresetSelected(qint64 durationMs);
+    // Emitted when the user picks a preset duration from the "Duration From
+    // Start" dropdown. The receiver should set Out = In + durationMs.
+    void durationFromStartPresetSelected(qint64 durationMs);
+    // Emitted when the user picks a preset duration from the "Duration From
+    // End" dropdown. The receiver should set In = Out - durationMs.
+    void durationFromEndPresetSelected(qint64 durationMs);
     // Emitted when the user clicks the Crop button: trim the working clip
     // down to the current [In, Out] and continue editing from there.
     void cropClicked();
@@ -52,14 +55,20 @@ signals:
     void cutClicked();
 
 private:
+    // Which In/Out edge a duration preset is anchored to. "FromStart" means
+    // the duration extends forward from In (Out = In + d); "FromEnd" means
+    // the duration extends backward from Out (In = Out - d).
+    enum class DurationAnchor { FromStart, FromEnd };
+
     void updateLabels();
     // Commit the contents of an In/Out QLineEdit: parse it, emit the
     // corresponding *Edited signal on success, and re-format the field to
     // the canonical HH:MM:SS.mmm representation (or roll it back on failure).
     void commitTimeEdit(QLineEdit *edit, qint64 currentMs, bool isIn);
     // Prompt the user for a duration in seconds via a modal dialog, and
-    // emit outDurationPresetSelected() on confirmation. No-op on cancel.
-    void promptCustomDurationAndEmit();
+    // emit the appropriate durationFrom*PresetSelected() signal on
+    // confirmation. No-op on cancel.
+    void promptCustomDurationAndEmit(DurationAnchor anchor);
 
     QPushButton *m_playPause;
     QPushButton *m_playFromStart;
@@ -70,7 +79,8 @@ private:
     QLabel      *m_outLabel;
     QLineEdit   *m_inEdit;
     QLineEdit   *m_outEdit;
-    QComboBox   *m_durationPreset;
+    QComboBox   *m_durationFromStartPreset;
+    QComboBox   *m_durationFromEndPreset;
     QPushButton *m_customRange;
     QPushButton *m_crop;
     QPushButton *m_cut;

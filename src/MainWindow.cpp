@@ -38,6 +38,7 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QTemporaryFile>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -63,10 +64,11 @@ MainWindow::MainWindow(QWidget *parent)
     qInfo() << "[DnD] MainWindow constructed; qApp event filter installed; "
                "platform =" << QGuiApplication::platformName();
 
-    m_session     = new VideoSession(this);
-    m_trimRunner  = new FfmpegTrimRunner(this);
-    m_cropRunner  = new FfmpegTrimRunner(this);
-    m_cutRunner   = new FfmpegCutRunner(this);
+    m_session            = new VideoSession(this);
+    m_trimRunner         = new FfmpegTrimRunner(this);
+    m_cropRunner         = new FfmpegTrimRunner(this);
+    m_cutRunner          = new FfmpegCutRunner(this);
+    m_removeAudioRunner  = new FfmpegTrimRunner(this);
 
     buildCentralLayout();
     buildMenus();
@@ -166,8 +168,17 @@ void MainWindow::buildMenus()
     m_actionQuit = fileMenu->addAction(tr("&Quit"), qApp, &QApplication::quit);
     m_actionQuit->setShortcut(QKeySequence::Quit);
 
-    auto *audioMenu = menuBar()->addMenu(tr("&Audio"));
-    m_outputMenu  = audioMenu->addMenu(tr("&Output Device"));
+    auto *editMenu = menuBar()->addMenu(tr("&Edit"));
+
+    m_actionRemoveAudio = editMenu->addAction(
+        tr("&Remove Audio"), this, &MainWindow::onRemoveAudioTriggered);
+    m_actionRemoveAudio->setStatusTip(
+        tr("Strip the audio track from the working clip. Subsequent edits and "
+           "exports will have no audio. The original file is not modified."));
+
+    editMenu->addSeparator();
+
+    m_outputMenu  = editMenu->addMenu(tr("Audio &Output Device"));
     m_outputGroup = new QActionGroup(this);
     m_outputGroup->setExclusive(true);
     // Refresh the device list each time the menu is opened so hot-plugged
@@ -220,6 +231,8 @@ void MainWindow::wireConnections()
             this, &MainWindow::onPlayerDuration);
     connect(m_player, &PlayerWidget::playbackStateChanged,
             m_transport, &TransportBar::setPlaybackState);
+    connect(m_player, &PlayerWidget::mediaStatusChanged,
+            this, &MainWindow::onPlayerMediaStatus);
     connect(m_player, &PlayerWidget::mediaError,
             this, &MainWindow::onPlayerError);
 
@@ -237,12 +250,19 @@ void MainWindow::wireConnections()
             this, [this](qint64 ms) { m_session->setIn(ms); });
     connect(m_transport, &TransportBar::outTimeEdited,
             this, [this](qint64 ms) { m_session->setOut(ms); });
-    connect(m_transport, &TransportBar::outDurationPresetSelected,
+    connect(m_transport, &TransportBar::durationFromStartPresetSelected,
             this, [this](qint64 durationMs) {
                 // Anchor the requested duration to the current In point.
                 // VideoSession::setOut clamps to media duration, so picking a
                 // preset that would extend past EOF still produces a valid range.
                 m_session->setOut(m_session->inMs() + durationMs);
+            });
+    connect(m_transport, &TransportBar::durationFromEndPresetSelected,
+            this, [this](qint64 durationMs) {
+                // Anchor the requested duration to the current Out point.
+                // VideoSession::setIn clamps to >= 0 (and to <= Out), so a
+                // preset longer than the current Out simply pins In to 0.
+                m_session->setIn(m_session->outMs() - durationMs);
             });
     connect(m_transport, &TransportBar::loopToggled,
             this, [this](bool on) {
@@ -259,6 +279,17 @@ void MainWindow::wireConnections()
             this, &MainWindow::onTimelineSeek);
     connect(m_timeline, &TimelineWidget::inOutChanged,
             this, &MainWindow::onTimelineInOut);
+    // Live drag preview: only mirror the values into the transport bar's
+    // In/End time labels so the user sees the timestamps move with the
+    // handle. Crucially we do NOT touch the VideoSession or the player here:
+    // routing every mouse-move through setPosition() makes Qt 6's FFmpeg
+    // backend churn out a fresh PipeWire stream per call (visible in
+    // pavucontrol / Helvum as a parade of new sinks).
+    connect(m_timeline, &TimelineWidget::inOutDragged,
+            this, [this](qint64 inMs, qint64 outMs) {
+                m_transport->setInPosition(inMs);
+                m_transport->setOutPosition(outMs);
+            });
 
     connect(m_trimRunner, &FfmpegTrimRunner::progress,
             this, [this](double pct) {
@@ -370,6 +401,47 @@ void MainWindow::wireConnections()
                 m_session->openFile(output);
             });
 
+    connect(m_removeAudioRunner, &FfmpegTrimRunner::progress,
+            this, [this](double pct) {
+                if (m_removeAudioProgressDialog) {
+                    m_removeAudioProgressDialog->setValue(int(std::round(pct)));
+                }
+            });
+    connect(m_removeAudioRunner, &FfmpegTrimRunner::finished,
+            this, [this](bool ok, const QString &errorTail) {
+                if (m_removeAudioProgressDialog) {
+                    m_removeAudioProgressDialog->reset();
+                    m_removeAudioProgressDialog->deleteLater();
+                    m_removeAudioProgressDialog = nullptr;
+                }
+
+                const QString output = m_removeAudioPendingOutput;
+                m_removeAudioPendingOutput.clear();
+
+                if (!ok) {
+                    if (!output.isEmpty()) QFile::remove(output);
+                    QMessageBox::critical(this, tr("Remove Audio Failed"),
+                                          errorTail.isEmpty()
+                                              ? tr("ffmpeg exited with an error.")
+                                              : errorTail);
+                    return;
+                }
+
+                // Mirror the crop/cut working-clip swap: capture the friendly
+                // display name on the first edit, hand the player the new
+                // audio-less temp file, and let onSessionOpened retire the
+                // previous working-clip temp.
+                if (m_workingClipDisplayName.isEmpty()) {
+                    m_workingClipDisplayName = QFileInfo(m_session->filePath()).fileName();
+                }
+
+                m_player->pause();
+                m_player->clearSource();
+
+                m_workingClipTempFiles.append(output);
+                m_session->openFile(output);
+            });
+
     // Initial volume sync (TransportBar default is 80).
     m_player->setVolume(0.8f);
 }
@@ -412,6 +484,9 @@ void MainWindow::onCloseTriggered()
     if (m_cutRunner && m_cutRunner->isRunning()) {
         m_cutRunner->cancel();
     }
+    if (m_removeAudioRunner && m_removeAudioRunner->isRunning()) {
+        m_removeAudioRunner->cancel();
+    }
     m_session->close();
     m_player->clearSource();
     m_player->setAudioOnlyMode(false);
@@ -445,7 +520,8 @@ void MainWindow::onExportTriggered()
         return;
     }
 
-    if (m_trimRunner->isRunning() || m_cropRunner->isRunning() || m_cutRunner->isRunning()) {
+    if (m_trimRunner->isRunning() || m_cropRunner->isRunning()
+        || m_cutRunner->isRunning() || m_removeAudioRunner->isRunning()) {
         QMessageBox::information(this, tr("Operation In Progress"),
                                  tr("Wait for the current operation to finish."));
         return;
@@ -510,7 +586,8 @@ void MainWindow::onCropTriggered()
         return;
     }
 
-    if (m_cropRunner->isRunning() || m_trimRunner->isRunning() || m_cutRunner->isRunning()) {
+    if (m_cropRunner->isRunning() || m_trimRunner->isRunning()
+        || m_cutRunner->isRunning() || m_removeAudioRunner->isRunning()) {
         QMessageBox::information(this, tr("Operation In Progress"),
                                  tr("Wait for the current operation to finish."));
         return;
@@ -602,7 +679,8 @@ void MainWindow::onCutTriggered()
         return;
     }
 
-    if (m_cropRunner->isRunning() || m_trimRunner->isRunning() || m_cutRunner->isRunning()) {
+    if (m_cropRunner->isRunning() || m_trimRunner->isRunning()
+        || m_cutRunner->isRunning() || m_removeAudioRunner->isRunning()) {
         QMessageBox::information(this, tr("Operation In Progress"),
                                  tr("Wait for the current operation to finish."));
         return;
@@ -659,6 +737,92 @@ void MainWindow::onCutTriggered()
     m_cutRunner->start(sourcePath, outputPath,
                        m_session->inMs(), m_session->outMs(),
                        m_session->mediaInfo().durationMs);
+}
+
+void MainWindow::onRemoveAudioTriggered()
+{
+    if (!m_session->isOpen() || !m_session->mediaInfo().isValid()) {
+        QMessageBox::information(this, tr("No Media"),
+                                 tr("Open a video file before removing audio."));
+        return;
+    }
+
+    const MediaInfo &info = m_session->mediaInfo();
+    if (!info.hasVideo()) {
+        QMessageBox::information(this, tr("Audio-Only Source"),
+                                 tr("This file is audio-only; removing its audio "
+                                    "would leave nothing behind."));
+        return;
+    }
+    if (!info.hasAudio()) {
+        QMessageBox::information(this, tr("No Audio Track"),
+                                 tr("The working clip has no audio track to remove."));
+        return;
+    }
+
+    if (m_cropRunner->isRunning() || m_trimRunner->isRunning()
+        || m_cutRunner->isRunning() || m_removeAudioRunner->isRunning()) {
+        QMessageBox::information(this, tr("Operation In Progress"),
+                                 tr("Wait for the current operation to finish."));
+        return;
+    }
+
+    if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()) {
+        QMessageBox::critical(this, tr("ffmpeg Not Found"),
+                              tr("ffmpeg was not found on PATH.\n\nInstall it with:\n  sudo pacman -S ffmpeg"));
+        return;
+    }
+
+    {
+        const auto answer = QMessageBox::question(
+            this, tr("Remove Audio"),
+            tr("Strip the audio track from the working clip?\n\n"
+               "This action cannot be undone. Your original file on disk will "
+               "not be modified \u2014 only the in-app working clip changes."),
+            QMessageBox::Yes | QMessageBox::Cancel,
+            QMessageBox::Yes);
+        if (answer != QMessageBox::Yes) return;
+    }
+
+    // Reuse Crop's temp-file recipe: keep the source extension so ffmpeg
+    // picks the same muxer and the player can re-decode without surprises.
+    const QString sourcePath = m_session->filePath();
+    const QString sourceExt  = QFileInfo(sourcePath).suffix();
+    const QString suffix     = sourceExt.isEmpty() ? QStringLiteral("mkv") : sourceExt;
+    const QString templatePath = QDir::temp().filePath(
+        QStringLiteral("vtrim-noaudio-XXXXXX.") + suffix);
+
+    QTemporaryFile tempFile(templatePath);
+    tempFile.setAutoRemove(false);
+    if (!tempFile.open()) {
+        QMessageBox::critical(this, tr("Remove Audio Failed"),
+                              tr("Could not create a temporary file for the audio-less output."));
+        return;
+    }
+    const QString outputPath = tempFile.fileName();
+    tempFile.close();
+
+    m_removeAudioPendingOutput = outputPath;
+
+    m_removeAudioProgressDialog = new QProgressDialog(tr("Removing audio..."),
+                                                      tr("Cancel"), 0, 100, this);
+    m_removeAudioProgressDialog->setWindowModality(Qt::WindowModal);
+    m_removeAudioProgressDialog->setMinimumDuration(0);
+    m_removeAudioProgressDialog->setAutoClose(false);
+    m_removeAudioProgressDialog->setAutoReset(false);
+    m_removeAudioProgressDialog->setValue(0);
+    connect(m_removeAudioProgressDialog, &QProgressDialog::canceled,
+            m_removeAudioRunner, &FfmpegTrimRunner::cancel);
+
+    // Full-range Fast trim with -an: stream-copies the video losslessly while
+    // dropping the audio stream entirely. Near-instant even on big files.
+    m_removeAudioRunner->start(sourcePath, outputPath,
+                               0, info.durationMs,
+                               FfmpegTrimRunner::Mode::Fast,
+                               /*fpsOverride=*/0.0,
+                               /*audioOnly=*/false,
+                               FfmpegTrimRunner::AudioFormat::Aac,
+                               /*dropAudio=*/true);
 }
 
 void MainWindow::onAboutTriggered()
@@ -829,6 +993,9 @@ void MainWindow::onMediaInfoUpdated(const MediaInfo &info)
         const QString caption = QFileInfo(m_session->filePath()).fileName();
         m_player->setAudioOnlyMode(info.isAudioOnly(), caption);
     }
+    // The probe is what tells us whether this file has audio, which gates
+    // the Remove Audio action. Re-evaluate now so the menu state matches.
+    updateActionsEnabled();
     updateInfoLabel();
 }
 
@@ -864,6 +1031,19 @@ void MainWindow::onPlayerDuration(qint64 ms)
     if (ms > 0 && ms != m_timeline->durationMs()) {
         m_timeline->setDuration(ms);
         m_transport->setDuration(ms);
+    }
+}
+
+void MainWindow::onPlayerMediaStatus(QMediaPlayer::MediaStatus status)
+{
+    // When Out is set to (or very close to) the end of the media, playback
+    // reaches EndOfMedia before onPlayerPosition() can enforce the loop:
+    // QMediaPlayer transitions to StoppedState, so the PlayingState guard in
+    // the position handler trips and the seek-back-to-In never runs.
+    // Catch EndOfMedia here so loop works regardless of where Out is placed.
+    if (status == QMediaPlayer::EndOfMedia && m_loopEnabled && hasValidRange()) {
+        m_player->setPosition(m_session->inMs());
+        m_player->play();
     }
 }
 
@@ -1064,6 +1244,45 @@ void MainWindow::openFile(const QString &path)
     m_session->openFile(path);
 }
 
+void MainWindow::openFromCommandLine(const QStringList &args)
+{
+    // Resolve each arg to a local filesystem path. The .desktop entry uses
+    // %F so file managers normally pass plain paths, but we also accept
+    // file:// URIs so a future switch to %U (or a manual `vtrim file:///…`
+    // invocation) keeps working. Anything with a non-file scheme is
+    // skipped — QMediaPlayer can't trim a remote URL anyway.
+    QString resolved;
+    for (const QString &arg : args) {
+        if (arg.isEmpty()) continue;
+        const QUrl url(arg);
+        QString candidate;
+        if (url.isValid() && url.scheme() == QLatin1String("file")) {
+            candidate = url.toLocalFile();
+        } else if (url.isValid() && !url.scheme().isEmpty()) {
+            qWarning() << "[CLI] Ignoring non-file argument:" << arg;
+            continue;
+        } else {
+            candidate = arg;
+        }
+        if (candidate.isEmpty()) continue;
+        if (!QFileInfo::exists(candidate)) {
+            qWarning() << "[CLI] File not found, skipping:" << candidate;
+            continue;
+        }
+        resolved = QFileInfo(candidate).absoluteFilePath();
+        break;
+    }
+    if (resolved.isEmpty()) return;
+
+    // Defer to the event loop so the player/timeline are fully constructed
+    // and main()'s app.exec() is running before m_session->openFile() kicks
+    // off probing and signal emission. Mirrors how the menu/DnD paths
+    // already enter openFile() from inside the event loop.
+    QTimer::singleShot(0, this, [this, resolved]() {
+        openFile(resolved);
+    });
+}
+
 void MainWindow::addToRecentFiles(const QString &path)
 {
     const QString abs = QFileInfo(path).absoluteFilePath();
@@ -1196,6 +1415,16 @@ void MainWindow::updateActionsEnabled()
     if (m_actionExport) m_actionExport->setEnabled(open);
     if (m_actionCrop)   m_actionCrop->setEnabled(open);
     if (m_actionCut)    m_actionCut->setEnabled(open);
+    if (m_actionRemoveAudio) {
+        // Removing audio is only meaningful for files that have BOTH a video
+        // stream (otherwise nothing would survive) and an audio stream
+        // (otherwise there's nothing to remove). The probed mediaInfo is the
+        // source of truth - it's empty until ffprobe finishes, in which case
+        // hasVideo()/hasAudio() return false and the action stays disabled
+        // until the probe lands.
+        const MediaInfo &info = m_session->mediaInfo();
+        m_actionRemoveAudio->setEnabled(open && info.hasVideo() && info.hasAudio());
+    }
 }
 
 void MainWindow::cleanupWorkingClipTempFiles()
@@ -1289,6 +1518,20 @@ void MainWindow::closeEvent(QCloseEvent *event)
         if (!m_cutPendingOutput.isEmpty()) {
             QFile::remove(m_cutPendingOutput);
             m_cutPendingOutput.clear();
+        }
+    }
+    if (m_removeAudioRunner && m_removeAudioRunner->isRunning()) {
+        const auto answer = QMessageBox::question(
+            this, tr("Remove Audio In Progress"),
+            tr("Removing audio is still running. Cancel it and quit?"));
+        if (answer != QMessageBox::Yes) {
+            event->ignore();
+            return;
+        }
+        m_removeAudioRunner->cancel();
+        if (!m_removeAudioPendingOutput.isEmpty()) {
+            QFile::remove(m_removeAudioPendingOutput);
+            m_removeAudioPendingOutput.clear();
         }
     }
     // Stop the player so its file handles drop before we delete the temp

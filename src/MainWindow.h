@@ -2,6 +2,7 @@
 
 #include <QList>
 #include <QMainWindow>
+#include <QMediaPlayer>
 #include <QPointer>
 #include <QStringList>
 
@@ -27,6 +28,14 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
 
+    // Open the first usable file from a list of command-line arguments
+    // (typically argv positional args forwarded by a file manager via the
+    // .desktop file's %F / %U field codes). Accepts plain absolute paths
+    // and file:// URLs. Defers the actual load through the event loop so
+    // it's safe to call before app.exec(), while the player/timeline are
+    // still wiring up.
+    void openFromCommandLine(const QStringList &args);
+
 protected:
     void closeEvent(QCloseEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -45,6 +54,7 @@ private slots:
     void onExportTriggered();
     void onCropTriggered();
     void onCutTriggered();
+    void onRemoveAudioTriggered();
     void onAboutTriggered();
     void onClearRecentTriggered();
     void onRecentTriggered();
@@ -57,6 +67,7 @@ private slots:
 
     void onPlayerPosition(qint64 ms);
     void onPlayerDuration(qint64 ms);
+    void onPlayerMediaStatus(QMediaPlayer::MediaStatus status);
     void onPlayerError(const QString &message);
 
     void onTimelineSeek(qint64 ms);
@@ -104,13 +115,14 @@ private:
     QList<QAction *>    m_recentActions;
     QStringList         m_recentFiles;
 
-    QAction *m_actionOpen   = nullptr;
-    QAction *m_actionClose  = nullptr;
-    QAction *m_actionExport = nullptr;
-    QAction *m_actionCrop   = nullptr;
-    QAction *m_actionCut    = nullptr;
-    QAction *m_actionAbout  = nullptr;
-    QAction *m_actionQuit   = nullptr;
+    QAction *m_actionOpen        = nullptr;
+    QAction *m_actionClose       = nullptr;
+    QAction *m_actionExport      = nullptr;
+    QAction *m_actionCrop        = nullptr;
+    QAction *m_actionCut         = nullptr;
+    QAction *m_actionRemoveAudio = nullptr;
+    QAction *m_actionAbout       = nullptr;
+    QAction *m_actionQuit        = nullptr;
 
     QMenu        *m_outputMenu  = nullptr;
     QActionGroup *m_outputGroup = nullptr;
@@ -137,6 +149,14 @@ private:
     FfmpegCutRunner           *m_cutRunner = nullptr;
     QPointer<QProgressDialog>  m_cutProgressDialog;
     QString                    m_cutPendingOutput;
+
+    // Remove Audio reuses the trim runner in Fast (stream-copy) mode with
+    // -an, full source range. The result becomes a new working clip via the
+    // same temp-file machinery Crop and Cut use, so subsequent edits and
+    // exports automatically inherit the audio-less state.
+    FfmpegTrimRunner          *m_removeAudioRunner = nullptr;
+    QPointer<QProgressDialog>  m_removeAudioProgressDialog;
+    QString                    m_removeAudioPendingOutput;
 
     // Temp file paths produced by past crop / cut operations on the current
     // working clip. Cleaned up when the user opens a different source,

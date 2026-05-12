@@ -16,8 +16,9 @@ namespace {
 // Width hint that comfortably fits "00:00:00.000" in a monospace font.
 constexpr int kTimeEditMinWidthChars = 13;
 
-// Preset durations offered by the "Duration" dropdown. Selecting one sets
-// Out = In + duration.
+// Preset durations offered by the "Duration From Start" / "Duration From End"
+// dropdowns. Selecting one sets either Out = In + duration (from start) or
+// In = Out - duration (from end), depending on which dropdown was used.
 struct DurationPreset {
     const char *label;
     qint64      ms;
@@ -47,7 +48,8 @@ TransportBar::TransportBar(QWidget *parent)
     , m_outLabel(new QLabel(tr("End:"), this))
     , m_inEdit(new QLineEdit(this))
     , m_outEdit(new QLineEdit(this))
-    , m_durationPreset(new QComboBox(this))
+    , m_durationFromStartPreset(new QComboBox(this))
+    , m_durationFromEndPreset(new QComboBox(this))
     , m_customRange(new QPushButton(tr("Custom Start/End"), this))
     , m_crop(new QPushButton(tr("Crop"), this))
     , m_cut(new QPushButton(tr("Cut"), this))
@@ -116,24 +118,38 @@ TransportBar::TransportBar(QWidget *parent)
     m_inEdit->hide();
     m_outEdit->hide();
 
-    m_durationPreset->setToolTip(
-        tr("Quick duration: set Out to In + the selected length."));
-    m_durationPreset->setPlaceholderText(tr("Duration..."));
-    for (const auto &preset : kDurationPresets) {
-        m_durationPreset->addItem(tr(preset.label), QVariant::fromValue(preset.ms));
-    }
-    m_durationPreset->insertSeparator(m_durationPreset->count());
-    m_durationPreset->addItem(tr("Custom..."),
-                              QVariant::fromValue(kCustomDurationSentinel));
-    // No item should look "selected" at rest; this is a one-shot action chooser.
-    m_durationPreset->setCurrentIndex(-1);
+    // Both duration combos share the same preset list and "Custom..." entry;
+    // they differ only in which edge (In or Out) gets moved when a value is
+    // picked. Populate them with a small helper to keep them perfectly in
+    // sync (and to make adding a third anchor in the future trivial).
+    auto populateDurationCombo = [](QComboBox *combo, const QString &placeholder,
+                                    const QString &tooltip) {
+        combo->setToolTip(tooltip);
+        combo->setPlaceholderText(placeholder);
+        for (const auto &preset : kDurationPresets) {
+            combo->addItem(tr(preset.label), QVariant::fromValue(preset.ms));
+        }
+        combo->insertSeparator(combo->count());
+        combo->addItem(tr("Custom..."), QVariant::fromValue(kCustomDurationSentinel));
+        // No item should look "selected" at rest; this is a one-shot action chooser.
+        combo->setCurrentIndex(-1);
+    };
+    populateDurationCombo(
+        m_durationFromStartPreset,
+        tr("Duration From Start..."),
+        tr("Quick duration: set End to Start + the selected length."));
+    populateDurationCombo(
+        m_durationFromEndPreset,
+        tr("Duration From End..."),
+        tr("Quick duration: set Start to End - the selected length."));
 
     // Two-row layout:
     //   Row 1 - playback + destructive actions, with current/total time and
     //           volume floated to the right edge (they're playback metadata).
     //   Row 2 - the selection-editing cluster: Set Start / Set End /
-    //           Duration preset / Custom Start/End toggle, followed by the
-    //           manual Start/End edit fields (hidden until toggled on).
+    //           Duration From Start / Duration From End / Custom Start/End
+    //           toggle, followed by the manual Start/End edit fields (hidden
+    //           until toggled on).
     auto *outer = new QVBoxLayout(this);
     outer->setContentsMargins(8, 4, 8, 4);
     outer->setSpacing(4);
@@ -160,7 +176,8 @@ TransportBar::TransportBar(QWidget *parent)
     row2->addWidget(m_setIn);
     row2->addWidget(m_setOut);
     row2->addSpacing(8);
-    row2->addWidget(m_durationPreset);
+    row2->addWidget(m_durationFromStartPreset);
+    row2->addWidget(m_durationFromEndPreset);
     row2->addWidget(m_customRange);
     row2->addSpacing(8);
     row2->addWidget(m_inLabel);
@@ -198,24 +215,31 @@ TransportBar::TransportBar(QWidget *parent)
     // activated() (vs currentIndexChanged()) only fires for genuine user
     // selections, so resetting the index back to -1 below will not bounce
     // back into this slot.
-    connect(m_durationPreset, &QComboBox::activated, this, [this](int index) {
-        if (index < 0) return;
-        const qint64 durationMs = m_durationPreset->itemData(index).toLongLong();
-        // Snap the combo back to its placeholder so it stays a one-shot action
-        // chooser rather than appearing to "remember" the chosen duration.
-        // We do this before any blocking dialog so that, if the user cancels
-        // or the input is invalid, the combo is already in the correct
-        // visual state.
-        {
-            QSignalBlocker blocker(m_durationPreset);
-            m_durationPreset->setCurrentIndex(-1);
-        }
-        if (durationMs == kCustomDurationSentinel) {
-            promptCustomDurationAndEmit();
-        } else if (durationMs > 0) {
-            emit outDurationPresetSelected(durationMs);
-        }
-    });
+    auto wireDurationCombo = [this](QComboBox *combo, DurationAnchor anchor) {
+        connect(combo, &QComboBox::activated, this, [this, combo, anchor](int index) {
+            if (index < 0) return;
+            const qint64 durationMs = combo->itemData(index).toLongLong();
+            // Snap the combo back to its placeholder so it stays a one-shot
+            // action chooser rather than appearing to "remember" the chosen
+            // duration. We do this before any blocking dialog so that, if the
+            // user cancels or the input is invalid, the combo is already in
+            // the correct visual state.
+            {
+                QSignalBlocker blocker(combo);
+                combo->setCurrentIndex(-1);
+            }
+            if (durationMs == kCustomDurationSentinel) {
+                promptCustomDurationAndEmit(anchor);
+            } else if (durationMs > 0) {
+                if (anchor == DurationAnchor::FromStart)
+                    emit durationFromStartPresetSelected(durationMs);
+                else
+                    emit durationFromEndPresetSelected(durationMs);
+            }
+        });
+    };
+    wireDurationCombo(m_durationFromStartPreset, DurationAnchor::FromStart);
+    wireDurationCombo(m_durationFromEndPreset,   DurationAnchor::FromEnd);
 
     setControlsEnabled(false);
 }
@@ -246,7 +270,8 @@ void TransportBar::setControlsEnabled(bool on)
     m_loop->setEnabled(on);
     m_inEdit->setEnabled(on);
     m_outEdit->setEnabled(on);
-    m_durationPreset->setEnabled(on);
+    m_durationFromStartPreset->setEnabled(on);
+    m_durationFromEndPreset->setEnabled(on);
     m_customRange->setEnabled(on);
     m_crop->setEnabled(on);
     m_cut->setEnabled(on);
@@ -286,7 +311,7 @@ void TransportBar::updateLabels()
     m_totalTime->setText(TimeFormat::msToHms(m_durationMs));
 }
 
-void TransportBar::promptCustomDurationAndEmit()
+void TransportBar::promptCustomDurationAndEmit(DurationAnchor anchor)
 {
     // Seed with the current selection length when it's non-empty so a user
     // refining an existing range starts from "what they had". Otherwise fall
@@ -296,11 +321,18 @@ void TransportBar::promptCustomDurationAndEmit()
                                   ? int(std::min<qint64>(currentSelMs / 1000, 86'400))
                                   : 10;
 
+    const QString title = (anchor == DurationAnchor::FromStart)
+                              ? tr("Custom Duration From Start")
+                              : tr("Custom Duration From End");
+    const QString prompt = (anchor == DurationAnchor::FromStart)
+                               ? tr("Set End to Start + this many seconds:")
+                               : tr("Set Start to End - this many seconds:");
+
     bool ok = false;
     const int seconds = QInputDialog::getInt(
         this,
-        tr("Custom Duration"),
-        tr("Set Out to In + this many seconds:"),
+        title,
+        prompt,
         defaultSec,
         /*min=*/  1,
         /*max=*/  86'400,  // 24 hours; arbitrary but generous upper bound.
@@ -308,7 +340,11 @@ void TransportBar::promptCustomDurationAndEmit()
         &ok);
     if (!ok || seconds <= 0) return;
 
-    emit outDurationPresetSelected(qint64(seconds) * 1000);
+    const qint64 ms = qint64(seconds) * 1000;
+    if (anchor == DurationAnchor::FromStart)
+        emit durationFromStartPresetSelected(ms);
+    else
+        emit durationFromEndPresetSelected(ms);
 }
 
 void TransportBar::commitTimeEdit(QLineEdit *edit, qint64 currentMs, bool isIn)

@@ -44,6 +44,10 @@ signals:
     void positionChanged(qint64 ms);
     void durationChanged(qint64 ms);
     void playbackStateChanged(QMediaPlayer::PlaybackState state);
+    // Forwarded from QMediaPlayer so consumers (e.g. MainWindow) can react
+    // to lifecycle transitions like EndOfMedia without reaching into the
+    // underlying QMediaPlayer instance directly.
+    void mediaStatusChanged(QMediaPlayer::MediaStatus status);
     void mediaError(const QString &message);
 
 private:

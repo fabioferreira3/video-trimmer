@@ -25,6 +25,9 @@ public:
     // skipping libx264 / -r / +faststart that don't apply to audio files.
     // audioFormat picks the audio encoder/container for the precise audio-only
     // pipeline and is otherwise ignored.
+    // dropAudio appends `-an` so the output has no audio stream. It is
+    // mutually exclusive with audioOnly and is the mechanism behind the
+    // "Remove Audio" edit (full-range Fast trim into a working-clip temp).
     void start(const QString &input,
                const QString &output,
                qint64 inMs,
@@ -32,7 +35,8 @@ public:
                Mode mode,
                double fpsOverride = 0.0,
                bool audioOnly = false,
-               AudioFormat audioFormat = AudioFormat::Aac);
+               AudioFormat audioFormat = AudioFormat::Aac,
+               bool dropAudio = false);
     void cancel();
     bool isRunning() const;
 

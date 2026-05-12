@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QCommandLineParser>
 
 #include "MainWindow.h"
 
@@ -27,8 +28,26 @@ int main(int argc, char *argv[])
     QApplication::setOrganizationName("video-trimmer");
     QApplication::setDesktopFileName("vtrim");
 
+    // Accept zero-or-more files on the command line. This is what makes
+    // `Open with → Video Trimmer` from Nautilus (and other file managers)
+    // actually load the selected file: the .desktop entry's `Exec=vtrim %F`
+    // expands to `vtrim /path/to/clip.mp4`, and we forward the positional
+    // args to MainWindow which loads the first usable one.
+    QCommandLineParser parser;
+    parser.setApplicationDescription(
+        QApplication::translate("main",
+            "Millisecond-precision video and audio trimmer."));
+    parser.addHelpOption();
+    parser.addVersionOption();
+    parser.addPositionalArgument(
+        QStringLiteral("file"),
+        QApplication::translate("main", "Media file to open."),
+        QStringLiteral("[file]"));
+    parser.process(app);
+
     MainWindow window;
     window.show();
+    window.openFromCommandLine(parser.positionalArguments());
 
     return app.exec();
 }

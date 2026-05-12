@@ -80,9 +80,17 @@ void FfmpegTrimRunner::start(const QString &input,
                              Mode mode,
                              double fpsOverride,
                              bool audioOnly,
-                             AudioFormat audioFormat)
+                             AudioFormat audioFormat,
+                             bool dropAudio)
 {
     if (isRunning()) return;
+
+    // audioOnly + dropAudio would produce an output with neither stream; the
+    // dialogs that drive this runner never combine them, but be defensive.
+    if (audioOnly && dropAudio) {
+        emit finished(false, tr("Cannot drop audio from an audio-only export."));
+        return;
+    }
 
     const QString exe = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
     if (exe.isEmpty()) {
@@ -124,13 +132,22 @@ void FfmpegTrimRunner::start(const QString &input,
                 args << QStringLiteral("-r")
                      << QString::number(fpsOverride, 'f', 6);
             }
-            args << QStringLiteral("-c:a")     << QStringLiteral("aac")
-                 << QStringLiteral("-b:a")     << QStringLiteral("192k")
-                 << QStringLiteral("-movflags") << QStringLiteral("+faststart");
+            if (dropAudio) {
+                // -an wins over any -c:a setting, but specifying both would be
+                // ambiguous; skip the audio encoder args entirely instead.
+                args << QStringLiteral("-an");
+            } else {
+                args << QStringLiteral("-c:a") << QStringLiteral("aac")
+                     << QStringLiteral("-b:a") << QStringLiteral("192k");
+            }
+            args << QStringLiteral("-movflags") << QStringLiteral("+faststart");
         }
     } else {
         args << QStringLiteral("-c") << QStringLiteral("copy")
              << QStringLiteral("-avoid_negative_ts") << QStringLiteral("make_zero");
+        if (dropAudio) {
+            args << QStringLiteral("-an");
+        }
     }
 
     args << QStringLiteral("-progress") << QStringLiteral("pipe:1")

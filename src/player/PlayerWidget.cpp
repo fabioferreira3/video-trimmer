@@ -80,8 +80,11 @@ PlayerWidget::PlayerWidget(QWidget *parent)
                 emit mediaError(msg);
             });
 
-    // One-shot diagnostic when a file is fully loaded - run the app from a terminal
-    // (./build/video-trimmer) to see this output and verify the pipeline.
+    // Forward media status changes so MainWindow can implement loop-at-EOF
+    // behaviour without poking at the underlying QMediaPlayer directly.
+    // Also one-shot diagnostic when a file is fully loaded - run the app
+    // from a terminal (./build/video-trimmer) to see this output and verify
+    // the pipeline.
     connect(m_player, &QMediaPlayer::mediaStatusChanged, this,
             [this](QMediaPlayer::MediaStatus status) {
                 if (status == QMediaPlayer::LoadedMedia) {
@@ -94,6 +97,7 @@ PlayerWidget::PlayerWidget(QWidget *parent)
                         << "  volume="      << m_audio->volume()
                         << "  muted="       << m_audio->isMuted();
                 }
+                emit mediaStatusChanged(status);
             });
 }
 
