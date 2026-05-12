@@ -167,14 +167,85 @@ git push -u origin master
 
 ## Publishing future updates
 
-Every subsequent release is the same as section "Publishing the first stable
-release" but without step 4's `git clone` — just `cd` into your existing
-`aur-vtrim/` clone, `git pull`, copy the updated files, regenerate
-`.SRCINFO` (`makepkg --printsrcinfo > .SRCINFO`), commit, and push.
+The version lives in exactly one place in source: the
+`project(vtrim VERSION X.Y.Z)` declaration in the top-level `CMakeLists.txt`.
+Every other place that has to know the version derives from it:
 
-For the `-git` package you only need to push again if **packaging metadata**
-changes (new dependency, install layout change). The package itself always
-rebuilds against the latest master at install time.
+- `src/main.cpp` gets it via a `VTRIM_VERSION` compile definition baked in
+  from `${PROJECT_VERSION}` (see `target_compile_definitions` in
+  `CMakeLists.txt`), so `vtrim --version` always matches the build.
+- `dist/aur/vtrim-local/PKGBUILD` parses `CMakeLists.txt` in its `pkgver()`.
+- `dist/aur/vtrim-git/PKGBUILD` derives from `git describe --long --tags`.
+
+The stable `dist/aur/vtrim/PKGBUILD` is the only file that has to embed a
+literal `pkgver=X.Y.Z` — its build runs inside a fresh AUR clone with no
+source tree available at parse time, and the GitHub tarball URL has to be
+constructed from `$pkgver` before any source is fetched. The release script
+keeps that literal in sync.
+
+### One-command release: `dev/release.sh`
+
+From the repo root, with a clean working tree on `master`:
+
+```bash
+./dev/release.sh 0.2.0
+```
+
+That single command:
+
+1. Preflight-checks: right branch, clean tree, tag not already shipped,
+   AUR clone present, required tools (`makepkg`, `updpkgsums`, `curl`, …).
+2. Bumps `CMakeLists.txt` + `dist/aur/vtrim/PKGBUILD` to the new version,
+   resets `pkgrel=1`, resets `sha256sums=('SKIP')`.
+3. Commits the bump, creates the `vX.Y.Z` annotated tag, pushes both to
+   GitHub.
+4. Waits for the GitHub tarball to be live, then runs `updpkgsums` to pin
+   the real sha256 and `makepkg --printsrcinfo > .SRCINFO`.
+5. Commits the synced `PKGBUILD` + `.SRCINFO` back to GitHub.
+6. `cd`s into your AUR clone, copies the two files in, commits, and pushes
+   to `aur.archlinux.org/vtrim`.
+
+After it prints `Release X.Y.Z complete`, the AUR page should show the new
+version within ~30 seconds.
+
+Useful flags:
+
+| Flag | Purpose |
+|------|---------|
+| `-y`, `--yes` | Skip the confirmation prompt. |
+| `--smoke-test` | Additionally run `makepkg -si` (installs locally) and `namcap`. |
+| `--skip-aur` | Do everything except the AUR push (useful if AUR SSH is broken). |
+| `--aur-clone PATH` | Override the AUR clone location (default `~/src/aur-vtrim`, or `$VTRIM_AUR_CLONE`). |
+
+Every step is idempotent where possible: if a transient failure stops the
+script halfway (e.g. AUR push times out), you can re-run it with the same
+version. It refuses to re-tag if the tag is already on the remote, and
+skips git commits that have nothing new to commit.
+
+### Lightweight bump (no release)
+
+If you want to bump `CMakeLists.txt` + the stable `PKGBUILD` without
+committing or pushing anything (e.g. to verify a `vtrim-local` build picks
+up the new version first), there's a smaller sibling:
+
+```bash
+./dev/bump-version.sh 0.2.0
+```
+
+It does only steps 1–2 from the release flow above, then leaves the working
+tree edited so you can inspect, test, and commit by hand.
+
+### Notes on the other two packages
+
+- **`vtrim-git`**: only push to the AUR again if **packaging metadata**
+  changes (new dependency, install layout change). The package itself always
+  rebuilds against the latest master at install time, and its `pkgver()`
+  regenerates from `git describe` on each install. `release.sh` does
+  **not** touch this AUR repo.
+- **`vtrim-local`**: never goes to the AUR. Its `pkgver()` reads
+  `CMakeLists.txt`, so `cmake --build build --target refresh` automatically
+  produces packages named `vtrim-local-<new-version>.local.<timestamp>`
+  after a bump — no further action required.
 
 ## Common mistakes to avoid
 

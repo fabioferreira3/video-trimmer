@@ -24,7 +24,9 @@ int main(int argc, char *argv[])
     // (Wayland especially) use to associate the running window with the
     // installed .desktop entry — it must match the basename of vtrim.desktop.
     QApplication::setApplicationName("Video Trimmer");
-    QApplication::setApplicationVersion("0.1.1");
+    // VTRIM_VERSION is injected at compile time from CMakeLists.txt's project(VERSION ...).
+    // See target_compile_definitions(vtrim PRIVATE VTRIM_VERSION=...) in CMakeLists.txt.
+    QApplication::setApplicationVersion(QStringLiteral(VTRIM_VERSION));
     QApplication::setOrganizationName("video-trimmer");
     QApplication::setDesktopFileName("vtrim");
 
