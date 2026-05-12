@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.21)
 # distinct identifier here. The user-facing display name in the .desktop
 # entry can still be friendlier ("Video Trimmer").
 project(vtrim
-    VERSION 0.1.2
+    VERSION 0.2.0
     DESCRIPTION "Millisecond-precision video trimmer"
     LANGUAGES CXX
 )
@@ -65,6 +65,15 @@ target_link_libraries(vtrim PRIVATE
 
 target_compile_options(vtrim PRIVATE
     -Wall -Wextra -Wpedantic
+)
+
+# Bake the CMake project version into the binary so QApplication::setApplicationVersion()
+# (and therefore `vtrim --version` plus any future about-dialog) always matches the
+# package the user installed. The PROJECT_VERSION variable is set by project(... VERSION ...),
+# making CMakeLists.txt the single source of truth for the app version - bumping it there
+# is enough; no source file edits required.
+target_compile_definitions(vtrim PRIVATE
+    VTRIM_VERSION="${PROJECT_VERSION}"
 )
 
 # ---------------------------------------------------------------------------
